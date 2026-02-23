@@ -36,6 +36,7 @@ export default function Navbar({ isDark, onToggleDark }) {
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
 
+            <Link to="/signup" className="text-sm font-semibold text-slate-300 hover:text-slate-50 hidden md:inline">Sign up</Link>
             <Link to="/login" className="text-sm font-semibold text-slate-300 hover:text-slate-50 hidden md:inline">Sign in</Link>
             <Button as="a" href="#early-access" size="md" className="hidden md:inline-flex">
               Secure Early Access <ArrowRight className="h-4 w-4" />
