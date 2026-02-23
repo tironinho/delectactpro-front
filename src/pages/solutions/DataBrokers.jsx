@@ -51,9 +51,9 @@ export default function DataBrokers() {
         </div>
 
         <div className="mt-12 flex flex-wrap gap-4">
-          <a href="/#pricing">
-            <Button>Secure Setup Fee — Early Access</Button>
-          </a>
+          <Button as="a" href="mailto:ceo@deleteactpro.com?subject=DeleteActPro%20-%20Talk%20to%20Sales" aria-label="Contact sales at ceo@deleteactpro.com">
+            Talk to Sales
+          </Button>
           <Link to="/blog/data-broker-definition-sb362">
             <Button variant="ghost">Is my company a data broker?</Button>
           </Link>
