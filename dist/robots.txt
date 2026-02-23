@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Allow: /blog
+Allow: /blog/
+Allow: /tools/
+Allow: /login
+Allow: /signup
+
+# App routes are behind auth; crawlers typically do not need them
+# Allow: /app
+
+Sitemap: https://dropcompliancegateway.example/sitemap.xml
