@@ -2,15 +2,21 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card.jsx'
 import { listRuns } from '../../services/appService.js'
+import { toList } from '../../services/appService.js'
 
 export default function Runs() {
   const [runs, setRuns] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
+    setError('')
     listRuns()
-      .then((data) => setRuns(Array.isArray(data) ? data : data?.runs || []))
-      .catch(() => setRuns([]))
+      .then((data) => setRuns(toList(data)))
+      .catch((e) => {
+        setRuns([])
+        setError(e?.message || 'Failed to load runs. Check your connection.')
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -18,8 +24,14 @@ export default function Runs() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-50">Runs</h1>
-        <p className="mt-1 text-slate-400">Execution history and schedule (≤45 days recommended)</p>
+        <p className="mt-1 text-slate-400">Execution history and schedule. Run at least every 45 days for DROP compliance.</p>
       </div>
+
+      {error ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          {error} <Link to="/app/settings" className="underline">Settings</Link>
+        </div>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -29,7 +41,7 @@ export default function Runs() {
           {loading ? (
             <p className="text-sm text-slate-500">Loading…</p>
           ) : runs.length === 0 ? (
-            <p className="text-sm text-slate-500">No runs yet.</p>
+            <p className="text-sm text-slate-500">No runs yet. Once your connector or Customer API is configured and a schedule is set, runs will appear here.</p>
           ) : (
             <ul className="space-y-2">
               {runs.map((r) => (

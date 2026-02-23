@@ -17,9 +17,9 @@ export default function AuditLogs() {
     setLoading(true)
     try {
       const data = await getAuditLogs(requestId ? { request_id: requestId } : {})
-      setLogs(Array.isArray(data) ? data : data?.events || [])
+      setLogs(Array.isArray(data) ? data : data?.events || data?.items || [])
     } catch (e) {
-      setError(e?.message || 'Fetch failed')
+      setError(e?.message || 'Fetch failed. Check your connection or request_id.')
       setLogs([])
     } finally {
       setLoading(false)

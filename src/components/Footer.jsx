@@ -20,23 +20,51 @@ export default function Footer() {
             </p>
           </div>
 
-          <div className="md:col-span-3">
-            <div className="text-xs font-semibold tracking-wide text-slate-500">PRODUCT</div>
+          <div className="md:col-span-2">
+            <div className="text-xs font-semibold tracking-wide text-slate-500">SOLUTIONS</div>
             <ul className="mt-3 space-y-2 text-sm">
-              <li><a className="text-slate-300 hover:text-slate-50" href="#pricing">Pricing</a></li>
-              <li><a className="text-slate-300 hover:text-slate-50" href="#risk">Risk Calculator</a></li>
-              <li><a className="text-slate-300 hover:text-slate-50" href="#timeline">Regulatory Timeline</a></li>
+              <li><Link className="text-slate-300 hover:text-slate-50" to="/solutions/data-brokers">Data brokers</Link></li>
+              <li><a className="text-slate-300 hover:text-slate-50" href="mailto:sales@deleteactpro.com?subject=Lead%20gen%20inquiry">Lead gen agencies</a></li>
+              <li><a className="text-slate-300 hover:text-slate-50" href="mailto:sales@deleteactpro.com?subject=List%20broker%20inquiry">List brokers</a></li>
+            </ul>
+          </div>
+
+          <div className="md:col-span-2">
+            <div className="text-xs font-semibold tracking-wide text-slate-500">USE CASES</div>
+            <ul className="mt-3 space-y-2 text-sm">
+              <li><Link className="text-slate-300 hover:text-slate-50" to="/use-cases/drop-api-readiness">DROP API readiness</Link></li>
+              <li><Link className="text-slate-300 hover:text-slate-50" to="/blog/delete-act-audit-prep">Audit-ready logs</Link></li>
+              <li><Link className="text-slate-300 hover:text-slate-50" to="/compare/manual-vs-automated-delete-act-compliance">Manual vs automated</Link></li>
+            </ul>
+          </div>
+
+          <div className="md:col-span-3">
+            <div className="text-xs font-semibold tracking-wide text-slate-500">PRODUCT &amp; PRICING</div>
+            <ul className="mt-3 space-y-2 text-sm">
+              <li><a className="text-slate-300 hover:text-slate-50" href="/#pricing">Pricing</a></li>
+              <li><Link className="text-slate-300 hover:text-slate-50" to="/pricing/setup-fee-early-access">Setup fee &amp; Early Access</Link></li>
               <li><Link className="text-slate-300 hover:text-slate-50" to="/blog">Blog</Link></li>
             </ul>
           </div>
 
-          <div className="md:col-span-4">
-            <div className="text-xs font-semibold tracking-wide text-slate-500">TOOLS & BLOG</div>
+          <div className="md:col-span-12 lg:col-span-0" aria-hidden="true" />
+
+          <div className="md:col-span-3">
+            <div className="text-xs font-semibold tracking-wide text-slate-500">COMPLIANCE RESOURCES</div>
+            <ul className="mt-3 space-y-2 text-sm">
+              <li><Link className="text-slate-300 hover:text-slate-50" to="/blog">Blog index</Link></li>
+              <li><Link className="text-slate-300 hover:text-slate-50" to="/blog/california-delete-act-compliance">California Delete Act hub</Link></li>
+              <li><Link className="text-slate-300 hover:text-slate-50" to="/blog/drop-api-hub">DROP API hub</Link></li>
+              <li><Link className="text-slate-300 hover:text-slate-50" to="/blog/delete-act-audit-prep">Audit prep hub</Link></li>
+            </ul>
+          </div>
+
+          <div className="md:col-span-3">
+            <div className="text-xs font-semibold tracking-wide text-slate-500">TOOLS</div>
             <ul className="mt-3 space-y-2 text-sm">
               <li><Link className="text-slate-300 hover:text-slate-50" to="/tools/penalty-calculator">Penalty Calculator</Link></li>
               <li><Link className="text-slate-300 hover:text-slate-50" to="/tools/drop-readiness-checklist">DROP Readiness Checklist</Link></li>
               <li><Link className="text-slate-300 hover:text-slate-50" to="/tools/data-broker-self-assessment">Data Broker Self-Assessment</Link></li>
-              <li><Link className="text-slate-300 hover:text-slate-50" to="/blog">Blog index</Link></li>
             </ul>
           </div>
         </div>

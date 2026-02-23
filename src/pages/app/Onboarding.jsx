@@ -1,34 +1,71 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card.jsx'
 import Button from '../../components/ui/Button.jsx'
+import ReadinessChecklist from '../../components/onboarding/ReadinessChecklist.jsx'
 import {
   createConnector,
   listConnectors,
   createCustomerApi,
   listCustomerApis,
-  testCustomerApiHealth
+  testCustomerApiHealth,
+  listPartners,
+  listCascadePolicies,
+  listHashRecipes,
+  getIntegrationSummary
 } from '../../services/appService.js'
-import { Copy, Check, ChevronRight, Plug, Globe } from 'lucide-react'
+import { toList } from '../../services/appService.js'
+import { Copy, Check, ChevronRight, Plug, Globe, Building2 } from 'lucide-react'
 import clsx from 'clsx'
 
+const STORAGE_KEY = 'drop_onboarding'
 const CONTROL_PLANE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.deleteactpro.com'
 const DEFAULT_HEALTH = '/deleteactpro/health'
 const DEFAULT_DELETE = '/deleteactpro/delete'
 const DEFAULT_STATUS = '/deleteactpro/status'
 
-const INTEGRATION_MODES = [
-  { id: 'agent', label: 'Docker Agent (recommended)', desc: 'Zero-knowledge agent in your environment', icon: Plug },
-  { id: 'customer_apis', label: 'Customer APIs', desc: 'Your endpoints: health, delete, status', icon: Globe },
-  { id: 'csv', label: 'CSV / Batch fallback', desc: 'Optional bulk import path', icon: null }
+const STEP_IDS = ['company', 'mode', 'primary', 'recipe', 'partners', 'cascade', 'dryrun', 'golive']
+const STEP_LABELS = [
+  'Company basics',
+  'Integration mode',
+  'Primary data source',
+  'Hash recipe',
+  'Partners',
+  'Cascade mapping',
+  'Dry-run validation',
+  'Go-live checklist'
 ]
+
+const INTEGRATION_MODES = [
+  { id: 'agent', label: 'Docker Agent', desc: 'Zero-knowledge agent in your environment', icon: Plug },
+  { id: 'customer_apis', label: 'Customer APIs', desc: 'Your endpoints: health, delete, status', icon: Globe },
+  { id: 'hybrid', label: 'Hybrid', desc: 'Agent + Customer APIs', icon: Globe }
+]
+
+function loadProgress() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return { stepIndex: 0, stepStatus: {} }
+    const p = JSON.parse(raw)
+    return { stepIndex: Math.min(p.stepIndex ?? 0, STEP_IDS.length - 1), stepStatus: p.stepStatus || {} }
+  } catch {
+    return { stepIndex: 0, stepStatus: {} }
+  }
+}
+
+function saveProgress(stepIndex, stepStatus) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ stepIndex, stepStatus }))
+  } catch (_) {}
+}
 
 export default function Onboarding() {
   const navigate = useNavigate()
-  const [stepIndex, setStepIndex] = useState(0)
-  const [integrationMode, setIntegrationMode] = useState(null) // 'agent' | 'customer_apis' | 'csv'
+  const [progress, setProgress] = useState(loadProgress)
+  const [integrationMode, setIntegrationMode] = useState(null)
+  const [companyName, setCompanyName] = useState('')
+  const [tenantId, setTenantId] = useState('')
 
-  // Agent path
   const [connectorName, setConnectorName] = useState('')
   const [dbType, setDbType] = useState('postgres')
   const [connectorToken, setConnectorToken] = useState(null)
@@ -36,7 +73,6 @@ export default function Onboarding() {
   const [dockerRun, setDockerRun] = useState('')
   const [heartbeat, setHeartbeat] = useState(null)
 
-  // Customer API path
   const [apiName, setApiName] = useState('')
   const [apiBaseUrl, setApiBaseUrl] = useState('')
   const [apiHealthPath, setApiHealthPath] = useState(DEFAULT_HEALTH)
@@ -48,24 +84,46 @@ export default function Onboarding() {
   const [testApiLoading, setTestApiLoading] = useState(false)
   const [testApiMsg, setTestApiMsg] = useState('')
 
+  const [readinessItems, setReadinessItems] = useState([])
+  const [dropReady, setDropReady] = useState(false)
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const steps = integrationMode === 'agent'
-    ? ['mode', 'connector', 'test', 'recipe', 'partners', 'schedule']
-    : integrationMode === 'customer_apis'
-    ? ['mode', 'customer_api', 'test_api', 'recipe', 'partners', 'schedule']
-    : integrationMode === 'csv'
-    ? ['mode', 'recipe', 'partners', 'schedule']
-    : ['mode']
+  const stepIndex = Math.min(progress.stepIndex, STEP_IDS.length - 1)
+  const stepStatus = progress.stepStatus
+  const stepId = STEP_IDS[stepIndex]
 
-  const stepId = steps[stepIndex]
+  const setStepIndex = useCallback((i) => {
+    const next = Math.max(0, Math.min(i, STEP_IDS.length - 1))
+    setProgress((p) => {
+      const nextStatus = { ...p.stepStatus }
+      nextStatus[STEP_IDS[p.stepIndex]] = 'complete'
+      const out = { stepIndex: next, stepStatus: nextStatus }
+      saveProgress(out.stepIndex, out.stepStatus)
+      return out
+    })
+  }, [])
+
+  const markStep = useCallback((id, status) => {
+    setProgress((p) => {
+      const next = { ...p.stepStatus, [id]: status }
+      saveProgress(p.stepIndex, next)
+      return { ...p, stepStatus: next }
+    })
+  }, [])
+
+  useEffect(() => {
+    const stored = loadProgress()
+    if (stored.stepStatus?.mode) {
+      const mode = localStorage.getItem(STORAGE_KEY + '_mode')
+      if (mode) setIntegrationMode(mode)
+    }
+  }, [])
 
   function buildDockerRun(token, cId, dbUrl = '${DB_URL}', recipeId = '${HASH_RECIPE_ID}') {
-    const control = CONTROL_PLANE_URL
     return `docker run --rm \\
-  -e CONTROL_PLANE_URL=${control} \\
+  -e CONTROL_PLANE_URL=${CONTROL_PLANE_URL} \\
   -e CONNECTOR_TOKEN=${token} \\
   -e CONNECTOR_ID=${cId || '${CONNECTOR_ID}'} \\
   -e DB_TYPE=${dbType} \\
@@ -82,7 +140,89 @@ export default function Onboarding() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // —— Step: Choose mode ——
+  function getStepStatus(idx) {
+    const id = STEP_IDS[idx]
+    if (idx < stepIndex) return stepStatus[id] || 'complete'
+    if (idx === stepIndex) return stepStatus[id] || 'in_progress'
+    return 'not_started'
+  }
+
+  // —— Stepper ——
+  const stepper = (
+    <nav className="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-4 mb-6">
+      {STEP_IDS.map((id, idx) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => setStepIndex(idx)}
+          className={clsx(
+            'rounded-lg px-3 py-1.5 text-xs font-medium transition',
+            idx === stepIndex
+              ? 'bg-regulatory-500/20 text-regulatory-200'
+              : idx < stepIndex
+              ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              : 'text-slate-500 hover:text-slate-400'
+          )}
+        >
+          {idx + 1}. {STEP_LABELS[idx]}
+          <span className={clsx('ml-1.5', idx === stepIndex ? 'text-regulatory-400' : idx < stepIndex ? 'text-slate-500' : '')}>
+            {getStepStatus(idx) === 'complete' ? '✓' : getStepStatus(idx) === 'in_progress' ? '…' : ''}
+          </span>
+        </button>
+      ))}
+    </nav>
+  )
+
+  // —— Step 0: Company basics ——
+  if (stepId === 'company') {
+    const handleNext = () => {
+      markStep('company', 'complete')
+      setStepIndex(1)
+    }
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-50">Onboarding</h1>
+          <p className="mt-1 text-slate-400">Company and tenant basics</p>
+        </div>
+        {stepper}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-50">
+              <Building2 className="h-4 w-4 text-slate-400" />
+              Company / Tenant basics
+            </div>
+            <p className="text-xs text-slate-400">Optional. Used for display and multi-tenant contexts.</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-400">Company name</label>
+              <input
+                type="text"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="Acme Inc."
+                className="mt-1 w-full max-w-sm rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-2.5 text-slate-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400">Tenant ID (optional)</label>
+              <input
+                type="text"
+                value={tenantId}
+                onChange={(e) => setTenantId(e.target.value)}
+                placeholder="tenant-1"
+                className="mt-1 w-full max-w-sm rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-2.5 text-slate-100"
+              />
+            </div>
+            <Button onClick={handleNext}>Next: Choose integration mode <ChevronRight className="h-4 w-4" /></Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // —— Step 1: Mode ——
   if (stepId === 'mode') {
     return (
       <div className="space-y-8">
@@ -90,6 +230,7 @@ export default function Onboarding() {
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-50">Onboarding</h1>
           <p className="mt-1 text-slate-400">Choose how you want to integrate</p>
         </div>
+        {stepper}
         <div className="grid gap-4 sm:grid-cols-2">
           {INTEGRATION_MODES.map((m) => (
             <button
@@ -97,14 +238,14 @@ export default function Onboarding() {
               type="button"
               onClick={() => {
                 setIntegrationMode(m.id)
-                setStepIndex(1)
+                localStorage.setItem(STORAGE_KEY + '_mode', m.id)
+                markStep('mode', 'complete')
+                setStepIndex(2)
                 setError('')
               }}
               className={clsx(
                 'rounded-2xl border p-6 text-left transition',
-                integrationMode === m.id
-                  ? 'border-regulatory-500/50 bg-regulatory-500/10'
-                  : 'border-slate-800 bg-slate-950/40 hover:border-slate-700'
+                integrationMode === m.id ? 'border-regulatory-500/50 bg-regulatory-500/10' : 'border-slate-800 bg-slate-950/40 hover:border-slate-700'
               )}
             >
               {m.icon && <m.icon className="h-8 w-8 text-slate-300 mb-3" />}
@@ -118,8 +259,8 @@ export default function Onboarding() {
     )
   }
 
-  // —— Agent: Create Connector ——
-  if (stepId === 'connector' && integrationMode === 'agent') {
+  // —— Step 2: Primary data source (Connector or Customer API) ——
+  if (stepId === 'primary' && (integrationMode === 'agent' || integrationMode === 'hybrid')) {
     const handleCreate = async () => {
       setError('')
       setLoading(true)
@@ -136,18 +277,13 @@ export default function Onboarding() {
         setLoading(false)
       }
     }
-
     return (
       <div className="space-y-8">
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <button type="button" onClick={() => setStepIndex(0)}>Onboarding</button>
-          <span>/</span>
-          <span className="text-slate-200">Create Connector</span>
-        </div>
+        {stepper}
         <Card>
           <CardHeader>
-            <div className="text-sm font-semibold text-slate-50">Create Connector (Agent)</div>
-            <p className="text-xs text-slate-400">One-time token and docker run. Copy and run in your environment.</p>
+            <div className="text-sm font-semibold text-slate-50">Configure primary data source — Connector (Agent)</div>
+            <p className="text-xs text-slate-400">Create a connector and copy the docker run command.</p>
           </CardHeader>
           <CardContent className="space-y-4">
             {error ? <div className="rounded-xl border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm text-danger-200">{error}</div> : null}
@@ -176,8 +312,21 @@ export default function Onboarding() {
                     {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? 'Copied' : 'Copy'}
                   </button>
                 </div>
-                <p className="text-xs text-slate-500">Local dev: CONTROL_PLANE_URL=http://localhost:4242</p>
-                <Button onClick={() => setStepIndex(2)}>Next: Test connection <ChevronRight className="h-4 w-4" /></Button>
+                {integrationMode === 'hybrid' ? (
+                  <>
+                    <p className="text-xs text-slate-400">Optionally add a Customer API, or skip to next step.</p>
+                    <div className="grid gap-2 max-w-md">
+                      <input type="text" value={apiName} onChange={(e) => setApiName(e.target.value)} placeholder="API name" className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100" />
+                      <input type="url" value={apiBaseUrl} onChange={(e) => setApiBaseUrl(e.target.value)} placeholder="Base URL" className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100" />
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={async () => { setError(''); setLoading(true); try { await createCustomerApi({ name: apiName || 'My API', mode: 'CUSTOMER_APIS', baseUrl: apiBaseUrl.replace(/\/$/, ''), endpoints: { healthPath: apiHealthPath, deletePath: apiDeletePath, statusPath: apiStatusPath }, authType: 'HMAC', timeoutMs: 10000, retries: 3 }); setApiCreated(true); } catch (e) { setError(e?.message || 'Create failed'); } finally { setLoading(false); } }} disabled={loading}>Add Customer API</Button>
+                        <Button size="sm" variant="ghost" onClick={() => { markStep('primary', 'complete'); setStepIndex(3); }}>Skip — Next: Hash recipe</Button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <Button onClick={() => { markStep('primary', 'complete'); setStepIndex(3); }}>Next: Hash recipe <ChevronRight className="h-4 w-4" /></Button>
+                )}
               </>
             )}
           </CardContent>
@@ -186,44 +335,7 @@ export default function Onboarding() {
     )
   }
 
-  // —— Agent: Test connection ——
-  if (stepId === 'test' && integrationMode === 'agent') {
-    const handleTest = async () => {
-      setError('')
-      try {
-        const list = await listConnectors()
-        const conns = Array.isArray(list) ? list : list?.connectors || []
-        const c = connectorId ? conns.find((x) => x.id === connectorId) : conns[0]
-        setHeartbeat(c?.last_heartbeat ? new Date(c.last_heartbeat).toISOString() : null)
-      } catch (e) {
-        setError(e?.message || 'Could not verify')
-      }
-    }
-    return (
-      <div className="space-y-8">
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <button type="button" onClick={() => setStepIndex(1)}>Connector</button>
-          <span>/</span>
-          <span className="text-slate-200">Test connection</span>
-        </div>
-        <Card>
-          <CardHeader>
-            <div className="text-sm font-semibold text-slate-50">Test connection</div>
-            <p className="text-xs text-slate-400">After running the agent, check last heartbeat.</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {error ? <div className="rounded-xl border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm text-danger-200">{error}</div> : null}
-            <Button onClick={handleTest}>Test connection</Button>
-            {heartbeat ? <p className="text-sm text-regulatory-300">Last heartbeat: {heartbeat}</p> : <p className="text-sm text-slate-500">No heartbeat yet. Run the docker command first.</p>}
-            <Button onClick={() => setStepIndex(3)}>Next: Hash recipe <ChevronRight className="h-4 w-4" /></Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  // —— Customer API: Create + Validate ——
-  if (stepId === 'customer_api' && integrationMode === 'customer_apis') {
+  if (stepId === 'primary' && (integrationMode === 'customer_apis' || (integrationMode === 'hybrid' && apiCreated))) {
     const handleCreate = async () => {
       setError('')
       setLoading(true)
@@ -245,18 +357,13 @@ export default function Onboarding() {
         setLoading(false)
       }
     }
-
     return (
       <div className="space-y-8">
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <button type="button" onClick={() => setStepIndex(0)}>Onboarding</button>
-          <span>/</span>
-          <span className="text-slate-200">Customer API</span>
-        </div>
+        {stepper}
         <Card>
           <CardHeader>
-            <div className="text-sm font-semibold text-slate-50">Create Customer API integration</div>
-            <p className="text-xs text-slate-400">Endpoints + HMAC secret. Validate in next step.</p>
+            <div className="text-sm font-semibold text-slate-50">Configure primary data source — Customer API</div>
+            <p className="text-xs text-slate-400">Add your endpoints; validate in next step.</p>
           </CardHeader>
           <CardContent className="space-y-4">
             {error ? <div className="rounded-xl border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm text-danger-200">{error}</div> : null}
@@ -265,13 +372,13 @@ export default function Onboarding() {
                 <div><label className="block text-xs font-medium text-slate-400">Name</label><input type="text" value={apiName} onChange={(e) => setApiName(e.target.value)} placeholder="My API" className="mt-1 w-full max-w-sm rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-2.5 text-slate-100" /></div>
                 <div><label className="block text-xs font-medium text-slate-400">Base URL</label><input type="url" value={apiBaseUrl} onChange={(e) => setApiBaseUrl(e.target.value)} placeholder="https://api.example.com" className="mt-1 w-full max-w-md rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-2.5 text-slate-100" /></div>
                 <div><label className="block text-xs font-medium text-slate-400">Health path</label><input type="text" value={apiHealthPath} onChange={(e) => setApiHealthPath(e.target.value)} className="mt-1 w-full max-w-sm rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-2.5 text-slate-100" /></div>
-                <div><label className="block text-xs font-medium text-slate-400">HMAC shared secret (optional now; rotate later)</label><input type="password" value={apiSharedSecret} onChange={(e) => setApiSharedSecret(e.target.value)} className="mt-1 w-full max-w-sm rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-2.5 text-slate-100" /></div>
+                <div><label className="block text-xs font-medium text-slate-400">HMAC shared secret (optional)</label><input type="password" value={apiSharedSecret} onChange={(e) => setApiSharedSecret(e.target.value)} className="mt-1 w-full max-w-sm rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-2.5 text-slate-100" /></div>
                 <Button onClick={handleCreate} disabled={loading}>{loading ? 'Creating…' : 'Create'}</Button>
               </>
             ) : (
               <>
-                <div className="rounded-xl border border-regulatory-500/30 bg-regulatory-500/10 px-4 py-3 text-sm text-regulatory-200">Customer API integration created.</div>
-                <Button onClick={() => setStepIndex(2)}>Next: Test health & dry-run <ChevronRight className="h-4 w-4" /></Button>
+                <div className="rounded-xl border border-regulatory-500/30 bg-regulatory-500/10 px-4 py-3 text-sm text-regulatory-200">Customer API created.</div>
+                <Button onClick={() => { markStep('primary', 'complete'); setStepIndex(3); }}>Next: Hash recipe <ChevronRight className="h-4 w-4" /></Button>
               </>
             )}
           </CardContent>
@@ -280,116 +387,139 @@ export default function Onboarding() {
     )
   }
 
-  // —— Customer API: Test health / delete / status ——
-  if (stepId === 'test_api' && integrationMode === 'customer_apis') {
-    const runTest = async () => {
-      setTestApiLoading(true)
-      setTestApiMsg('')
-      try {
-        const apis = await listCustomerApis()
-        const list = Array.isArray(apis) ? apis : apis?.integrations || []
-        const first = list[0]
-        if (first) {
-          await testCustomerApiHealth(first.id)
-          setApiHealthOk(true)
-          setTestApiMsg('Health OK')
-        } else setTestApiMsg('No integration found')
-      } catch (e) {
-        setTestApiMsg(e?.message || 'Test failed')
-      } finally {
-        setTestApiLoading(false)
-      }
-    }
-    return (
-      <div className="space-y-8">
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <button type="button" onClick={() => setStepIndex(1)}>Customer API</button>
-          <span>/</span>
-          <span className="text-slate-200">Test</span>
-        </div>
-        <Card>
-          <CardHeader>
-            <div className="text-sm font-semibold text-slate-50">Test health & dry-run delete</div>
-            <p className="text-xs text-slate-400">Backend calls your health endpoint; optional dry-run delete.</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button onClick={runTest} disabled={testApiLoading}>{testApiLoading ? 'Testing…' : 'Test health'}</Button>
-            {testApiMsg && <p className={apiHealthOk ? 'text-sm text-regulatory-300' : 'text-sm text-slate-400'}>{testApiMsg}</p>}
-            <Button onClick={() => setStepIndex(3)}>Next: Hash recipe <ChevronRight className="h-4 w-4" /></Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  // —— Recipe / Partners / Schedule (shared) ——
-  const recipeStepIndex = integrationMode === 'agent' ? 3 : integrationMode === 'customer_apis' ? 3 : 1
-  const partnersStepIndex = integrationMode === 'agent' ? 4 : integrationMode === 'customer_apis' ? 4 : 2
-  const scheduleStepIndex = integrationMode === 'agent' ? 5 : integrationMode === 'customer_apis' ? 5 : 3
-
+  // —— Step 3: Hash recipe ——
   if (stepId === 'recipe') {
     return (
       <div className="space-y-8">
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <button type="button" onClick={() => setStepIndex(stepIndex - 1)}>Back</button>
-          <span>/</span>
-          <span className="text-slate-200">Hash recipe</span>
-        </div>
+        {stepper}
         <Card>
           <CardHeader>
-            <div className="text-sm font-semibold text-slate-50">Hash recipe (p_hash)</div>
-            <p className="text-xs text-slate-400">Select or create a recipe; test locally in Hash Recipes (zero-knowledge).</p>
+            <div className="text-sm font-semibold text-slate-50">Configure hash recipe (p_hash / subject_hash)</div>
+            <p className="text-xs text-slate-400">Select or create a recipe; test locally in Hash Recipes.</p>
           </CardHeader>
           <CardContent>
             <Button as="a" href="/app/hash-recipes">Open Hash Recipes</Button>
-            <Button variant="ghost" className="mt-3" onClick={() => setStepIndex(partnersStepIndex)}>Next: Partners & cascade <ChevronRight className="h-4 w-4" /></Button>
+            <Button variant="ghost" className="mt-3" onClick={() => { markStep('recipe', 'complete'); setStepIndex(4); }}>Next: Partners <ChevronRight className="h-4 w-4" /></Button>
           </CardContent>
         </Card>
       </div>
     )
   }
 
+  // —— Step 4: Partners ——
   if (stepId === 'partners') {
     return (
       <div className="space-y-8">
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <button type="button" onClick={() => setStepIndex(recipeStepIndex)}>Back</button>
-          <span>/</span>
-          <span className="text-slate-200">Partners & cascade</span>
-        </div>
+        {stepper}
         <Card>
           <CardHeader>
-            <div className="text-sm font-semibold text-slate-50">Partners & cascade policies</div>
-            <p className="text-xs text-slate-400">Add partners and map to connector or Customer API. Define policy (retries, SLA, mode).</p>
+            <div className="text-sm font-semibold text-slate-50">Register downstream partners</div>
+            <p className="text-xs text-slate-400">Third parties that receive deletion requests. Add partners and link to connector or Customer API.</p>
           </CardHeader>
           <CardContent>
             <div className="flex gap-3">
               <Button as="a" href="/app/partners">Partners</Button>
               <Button as="a" href="/app/cascade-policies" variant="ghost">Cascade policies</Button>
             </div>
-            <Button variant="ghost" className="mt-3" onClick={() => setStepIndex(scheduleStepIndex)}>Next: Schedule <ChevronRight className="h-4 w-4" /></Button>
+            <Button variant="ghost" className="mt-3" onClick={() => { markStep('partners', 'complete'); setStepIndex(5); }}>Next: Cascade mapping <ChevronRight className="h-4 w-4" /></Button>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  if (stepId === 'schedule') {
+  // —— Step 5: Cascade mapping ——
+  if (stepId === 'cascade') {
     return (
       <div className="space-y-8">
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <button type="button" onClick={() => setStepIndex(partnersStepIndex)}>Back</button>
-          <span>/</span>
-          <span className="text-slate-200">Schedule</span>
-        </div>
+        {stepper}
         <Card>
           <CardHeader>
-            <div className="text-sm font-semibold text-slate-50">Activate schedule</div>
-            <p className="text-xs text-slate-400">Recommended: run at least every 45 days for DROP compliance.</p>
+            <div className="text-sm font-semibold text-slate-50">Map cascade targets</div>
+            <p className="text-xs text-slate-400">Partner → connector or Customer API. Define policy (retries, SLA, mode).</p>
           </CardHeader>
           <CardContent>
-            <Button as="a" href="/app/runs">Configure runs</Button>
-            <Button variant="primary" className="mt-4" onClick={() => navigate('/app')}>Go to Dashboard</Button>
+            <Button as="a" href="/app/cascade-policies">Cascade policies</Button>
+            <Button variant="ghost" className="mt-3" onClick={() => { markStep('cascade', 'complete'); setStepIndex(6); }}>Next: Dry-run validation <ChevronRight className="h-4 w-4" /></Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // —— Step 6: Dry-run ——
+  if (stepId === 'dryrun') {
+    return (
+      <div className="space-y-8">
+        {stepper}
+        <Card>
+          <CardHeader>
+            <div className="text-sm font-semibold text-slate-50">Dry-run validation</div>
+            <p className="text-xs text-slate-400">Run a dry-run to validate the pipeline. Recommended at least once before go-live.</p>
+          </CardHeader>
+          <CardContent>
+            <Button as="a" href="/app/runs">View runs</Button>
+            <Button variant="ghost" className="mt-3" onClick={() => { markStep('dryrun', 'complete'); setStepIndex(7); }}>Next: Go-live checklist <ChevronRight className="h-4 w-4" /></Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // —— Step 7: Go-live ——
+  if (stepId === 'golive') {
+    const loadReadiness = () => {
+      Promise.all([
+        getIntegrationSummary(),
+        listConnectors().then((d) => toList(d, ['connectors', 'items'])),
+        listCustomerApis().then((d) => toList(d, ['integrations', 'items'])),
+        listHashRecipes().then((d) => toList(d, ['recipes', 'items'])),
+        listPartners().then((d) => toList(d, ['partners', 'items'])),
+        listCascadePolicies().then((d) => toList(d, ['policies', 'items']))
+      ]).then(([summary, connectors, apis, recipes, partners, policies]) => {
+        const hasIntegration = (summary?.connectorsCount ?? connectors?.length ?? 0) > 0 || (summary?.customerApisCount ?? apis?.length ?? 0) > 0
+        const hasRecipe = (recipes?.length ?? 0) > 0 && recipes.some((r) => r.active)
+        const hasPartners = (partners?.length ?? 0) > 0
+        const hasCascade = (policies?.length ?? 0) > 0
+        setReadinessItems([
+          { id: 'integration', label: 'At least one integration configured', ok: hasIntegration, link: '/app/integrations' },
+          { id: 'recipe', label: 'Hash recipe active', ok: hasRecipe, link: '/app/hash-recipes' },
+          { id: 'partners', label: 'At least one partner registered', ok: hasPartners, link: '/app/partners' },
+          { id: 'cascade', label: 'Cascade policy configured', ok: hasCascade, link: '/app/cascade-policies' },
+          { id: 'dryrun', label: 'Dry-run completed successfully in last 45 days', ok: false, link: '/app/runs' },
+          { id: 'billing', label: 'Billing setup fee paid', ok: !!summary?.billingSetupPaid, link: '/app/billing' }
+        ])
+      })
+    }
+    if (readinessItems.length === 0) loadReadiness()
+
+    const allComplete = readinessItems.length > 0 && readinessItems.every((i) => i.ok)
+    return (
+      <div className="space-y-8">
+        {stepper}
+        <Card>
+          <CardHeader>
+            <div className="text-sm font-semibold text-slate-50">Go-live readiness checklist</div>
+            <p className="text-xs text-slate-400">Ensure all items are complete before marking environment as DROP-ready.</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ReadinessChecklist items={readinessItems} />
+            <div className="flex flex-wrap gap-3 pt-4">
+              <Button variant="primary" disabled={!allComplete} onClick={() => setDropReady(true)}>
+                Mark environment as DROP-ready
+              </Button>
+              <Button variant="ghost" as="a" href="/app/runs">
+                Run validation again
+              </Button>
+              <Button variant="ghost" onClick={() => navigate('/app/dashboard')}>
+                Go to Dashboard
+              </Button>
+            </div>
+            {dropReady && (
+              <div className="rounded-xl border border-regulatory-500/30 bg-regulatory-500/10 px-4 py-3 text-sm text-regulatory-200">
+                Environment marked as DROP-ready. You can run validation again anytime from Runs.
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

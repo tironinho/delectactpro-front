@@ -1,4 +1,5 @@
 import Seo from '../components/Seo.jsx'
+import JsonLd from '../components/seo/JsonLd.jsx'
 import Container from '../components/Container.jsx'
 import Section from '../components/Section.jsx'
 import Button from '../components/ui/Button.jsx'
@@ -18,6 +19,7 @@ export default function Home() {
         description="Avoid the $200/day per request penalty by automating California DROP sync, cascading deletions, and audit-ready logs."
         canonicalPath="/"
       />
+      <JsonLd organization website />
 
       <main>
         <section className="relative overflow-hidden bg-slate-950 bg-hero">

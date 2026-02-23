@@ -12,7 +12,24 @@ export const BLOG_CATEGORIES = {
   F: 'ROI / cost & penalty scenarios'
 }
 
-/** @type {{ slug: string; title: string; description: string; category: keyof typeof BLOG_CATEGORIES; keywords: string[]; publishedAt: string; updatedAt: string; bodySections: { type: string; content: string | string[] }[]; faqs: { question: string; answer: string }[]; internalLinks: string[] }[]} */
+/** URL slug -> category key for /blog/category/:slug */
+export const BLOG_TAXONOMY_SLUGS = {
+  'sb362': 'A',
+  'drop-api': 'B',
+  'dsar-automation': 'F',
+  'audits': 'D',
+  'data-broker-compliance': 'E'
+}
+
+/** Pillar hub slugs (topic hubs) */
+export const PILLAR_SLUGS = [
+  'california-delete-act-compliance',
+  'drop-api-hub',
+  'data-broker-risk-center',
+  'delete-act-audit-prep'
+]
+
+/** Article shape: slug, title, description, category, keywords, publishedAt, updatedAt, bodySections, faqs, internalLinks. Optional: readingTimeMinutes, featured, pillarTarget (hub slug), searchIntent (informational|commercial|comparison|transactional). */
 export const articles = [
   // --- Existing 4 (migrated) ---
   {
@@ -408,7 +425,16 @@ const BATCH_50 = [
   { slug: 'august-1-mandatory-deadline', title: 'August 1st Mandatory Deadline: Last-Minute Checklist', description: 'Final checklist before mandatory DROP enforcement: ingestion, evidence, and partner SLAs.', category: 'A', keywords: ['August 1', 'mandatory', 'deadline', 'checklist'], publishedAt: '2025-02-20', updatedAt: '2025-02-20', bodySections: [{ type: 'paragraph', content: 'As the mandatory enforcement date approaches, ensure your connector is live, hash recipe is set, partners and cascade policy are configured, and run schedule is within 45 days.' }], faqs: [], internalLinks: ['enforcement-august-2026', 'sb362-45-day-deadline', 'readiness-score-dashboard'] }
 ]
 
-articles.push(...EXTRA_ARTICLES, ...MORE_ARTICLES, ...BATCH_50)
+const PILLAR_ARTICLES = [
+  { slug: 'california-delete-act-compliance', title: 'California Delete Act Compliance Hub', description: 'Central resource for SB 362, DROP, 45-day deadlines, and enforcement.', category: 'A', keywords: ['California', 'Delete Act', 'SB 362', 'compliance', 'hub'], publishedAt: '2025-02-01', updatedAt: '2025-02-20', bodySections: [{ type: 'paragraph', content: 'This hub collects articles on the California Delete Act (SB 362), the DROP registry, 45-day deletion deadlines, and mandatory enforcement. Start here for regulatory overview and deadlines.' }], faqs: [], internalLinks: ['data-broker-definition-sb362', 'sb362-45-day-deadline', 'enforcement-august-2026', 'drop-api-integration-guide'] },
+  { slug: 'drop-api-hub', title: 'DROP API Integration Hub', description: 'Technical guides for integrating with the California DROP API: idempotency, retries, evidence.', category: 'B', keywords: ['DROP API', 'integration', 'idempotency', 'hub'], publishedAt: '2025-02-01', updatedAt: '2025-02-20', bodySections: [{ type: 'paragraph', content: 'Technical hub for DROP API integration: ingestion, idempotency, retries, evidence logs, and partner cascades. Implementation and workflow design.' }], faqs: [], internalLinks: ['drop-api-integration-guide', 'idempotency-request-id', 'retry-backoff-cascade', 'docker-run-agent'] },
+  { slug: 'data-broker-risk-center', title: 'Data Broker Risk Center', description: 'Shadow brokers, lead gen risk, and scope assessment.', category: 'E', keywords: ['data broker', 'risk', 'shadow broker', 'hub'], publishedAt: '2025-02-01', updatedAt: '2025-02-20', bodySections: [{ type: 'paragraph', content: 'Assess whether your company falls under data broker definitions. Shadow brokers, enrichment vendors, people-search, and reseller obligations.' }], faqs: [], internalLinks: ['data-broker-definition-sb362', 'shadow-broker-lead-gen', 'people-search-broker', 'enrichment-vendors-broker'] },
+  { slug: 'delete-act-audit-prep', title: 'Delete Act Audit Prep', description: '2028 audits, evidence, logs, and audit packet export.', category: 'D', keywords: ['audit', '2028', 'evidence', 'prep', 'hub'], publishedAt: '2025-02-01', updatedAt: '2025-02-20', bodySections: [{ type: 'paragraph', content: 'Prepare for triennial audits: lifecycle timestamps, scope completeness, immutable logs, and audit packet export. Design logs like a product.' }], faqs: [], internalLinks: ['california-delete-act-audits-2028', 'export-audit-json', 'search-audit-by-request-id', 'immutable-audit-logs'] },
+  { slug: 'dsar-automation-roi-hub', title: 'DSAR Automation & ROI Hub', description: 'Manual vs automated cost, penalty exposure, and ROI of deletion automation.', category: 'F', keywords: ['DSAR', 'ROI', 'automation', 'hub'], publishedAt: '2025-02-01', updatedAt: '2025-02-20', bodySections: [{ type: 'paragraph', content: 'Compare manual vs automated DSAR processing: cost per request, penalty risk, and evidence quality. Use the penalty calculator and readiness checklist.' }], faqs: [], internalLinks: ['dsar-automation-roi', 'cost-per-request-automation', 'penalty-200-per-day', 'readiness-score-dashboard'] },
+  { slug: 'shadow-broker-compliance-hub', title: 'Shadow Broker Compliance Hub', description: 'Lead gen, martech, and enrichment vendors: when you are in scope for SB 362.', category: 'E', keywords: ['shadow broker', 'lead gen', 'martech', 'hub'], publishedAt: '2025-02-01', updatedAt: '2025-02-20', bodySections: [{ type: 'paragraph', content: 'Companies that enable access to personal data through enrichment, identity resolution, or partner distribution may be data brokers. Assess scope and get ready for DROP.' }], faqs: [], internalLinks: ['data-broker-definition-sb362', 'shadow-broker-lead-gen', 'enrichment-vendors-broker', 'people-search-broker'] }
+]
+
+articles.push(...EXTRA_ARTICLES, ...MORE_ARTICLES, ...BATCH_50, ...PILLAR_ARTICLES)
 
 export function getArticleBySlug(slug) {
   return articles.find((a) => a.slug === slug)
@@ -416,4 +442,8 @@ export function getArticleBySlug(slug) {
 
 export function getArticlesByCategory(category) {
   return articles.filter((a) => a.category === category)
+}
+
+export function getCategoryKeyBySlug(slug) {
+  return BLOG_TAXONOMY_SLUGS[slug] ?? null
 }

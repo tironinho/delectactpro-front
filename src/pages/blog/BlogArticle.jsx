@@ -1,8 +1,19 @@
 import { useParams, Link } from 'react-router-dom'
 import Container from '../../components/Container.jsx'
-import Seo from '../../components/Seo.jsx'
+import SEOHead from '../../components/SEOHead.jsx'
 import JsonLd from '../../components/seo/JsonLd.jsx'
+import { getSiteOrigin } from '../../utils/siteOrigin.js'
 import { getArticleBySlug } from '../../content/blog/articles.js'
+
+function readingTimeMinutes(article) {
+  const sections = article?.bodySections || []
+  let words = 0
+  sections.forEach((s) => {
+    if (s.type === 'paragraph') words += (s.content || '').split(/\s+/).length
+    if (s.type === 'list' && Array.isArray(s.content)) s.content.forEach((c) => { words += String(c).split(/\s+/).length })
+  })
+  return Math.max(1, Math.ceil(words / 200))
+}
 
 export default function BlogArticle() {
   const { slug } = useParams()
@@ -19,15 +30,21 @@ export default function BlogArticle() {
     )
   }
 
-  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const origin = getSiteOrigin()
   const url = `${origin}/blog/${article.slug}`
+  const readingMin = article.readingTimeMinutes ?? readingTimeMinutes(article)
+  const isTechnical = article.category === 'B'
+  const isAudit = article.category === 'D'
+  const isRisk = article.category === 'E' || article.category === 'F'
 
   return (
     <main className="min-h-screen bg-slate-950">
-      <Seo
+      <SEOHead
         title={`${article.title} — DROP Compliance Gateway`}
         description={article.description}
+        keywords={article.keywords}
         canonicalPath={`/blog/${article.slug}`}
+        ogType="article"
       />
       <JsonLd
         title={article.title}
@@ -36,18 +53,27 @@ export default function BlogArticle() {
         updatedAt={article.updatedAt}
         url={url}
         faqs={article.faqs || []}
+        breadcrumbs={[
+          { name: 'Blog', url: '/blog' },
+          { name: article.title, url: `/blog/${article.slug}` }
+        ]}
       />
       <Container className="py-16">
-        <div className="mb-8">
-          <Link to="/blog" className="text-sm font-semibold text-slate-400 hover:text-slate-50">← Back to blog</Link>
-        </div>
+        <nav className="mb-6 flex items-center gap-2 text-sm text-slate-500" aria-label="Breadcrumb">
+          <Link to="/blog" className="hover:text-slate-300">Blog</Link>
+          <span aria-hidden="true">/</span>
+          <span className="text-slate-300 truncate max-w-[200px]">{article.title}</span>
+        </nav>
 
         <article className="max-w-3xl">
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-50">{article.title}</h1>
           <p className="mt-4 text-lg text-slate-300">{article.description}</p>
-          <div className="mt-4 text-xs text-slate-500">
-            {article.publishedAt}
-            {article.updatedAt && article.updatedAt !== article.publishedAt ? ` · Updated ${article.updatedAt}` : ''}
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+            <span>Published {article.publishedAt}</span>
+            {article.updatedAt && article.updatedAt !== article.publishedAt && (
+              <span>Last updated {article.updatedAt}</span>
+            )}
+            <span>{readingMin} min read</span>
           </div>
 
           <div className="mt-10 space-y-6 text-[15px] leading-7 text-slate-300">
@@ -102,11 +128,27 @@ export default function BlogArticle() {
           )}
 
           <div className="mt-14 rounded-2xl border border-slate-800 bg-slate-950/40 p-6">
-            <div className="text-sm font-semibold text-slate-50">Want automation instead of firefighting?</div>
-            <p className="mt-2 text-sm text-slate-300">Early Access is limited. Quantify exposure and start implementation before enforcement.</p>
-            <div className="mt-4 flex gap-4">
+            <div className="text-sm font-semibold text-slate-50">
+              {isTechnical && 'Book implementation / early access'}
+              {isAudit && 'See audit-ready features'}
+              {isRisk && 'Use the penalty calculator'}
+              {!isTechnical && !isAudit && !isRisk && 'Want automation instead of firefighting?'}
+            </div>
+            <p className="mt-2 text-sm text-slate-300">
+              {isTechnical && 'Early Access is limited. Get onboarding and one-command integration.'}
+              {isAudit && 'Immutable logs, audit packets, and exportable evidence for 2028 audits.'}
+              {isRisk && 'Quantify exposure and penalty risk before mandatory enforcement.'}
+              {!isTechnical && !isAudit && !isRisk && 'Early Access is limited. Quantify exposure and start implementation before enforcement.'}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-4">
               <a href="/#pricing" className="text-sm font-semibold text-regulatory-200 hover:text-regulatory-100">View pricing →</a>
               <Link to="/app/onboarding" className="text-sm font-semibold text-regulatory-200 hover:text-regulatory-100">Go to onboarding →</Link>
+              {isRisk && (
+                <Link to="/tools/penalty-calculator" className="text-sm font-semibold text-regulatory-200 hover:text-regulatory-100">Penalty calculator →</Link>
+              )}
+              {isAudit && (
+                <Link to="/app/audit-logs" className="text-sm font-semibold text-regulatory-200 hover:text-regulatory-100">Audit logs →</Link>
+              )}
             </div>
           </div>
         </article>

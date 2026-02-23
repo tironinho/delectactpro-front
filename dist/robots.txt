@@ -5,8 +5,8 @@ Allow: /blog/
 Allow: /tools/
 Allow: /login
 Allow: /signup
+Disallow: /app/
+Disallow: /billing/success
+Disallow: /billing/cancel
 
-# App routes are behind auth; crawlers typically do not need them
-# Allow: /app
-
-Sitemap: https://dropcompliancegateway.example/sitemap.xml
+Sitemap: https://deleteactpro.com/sitemap.xml

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card.jsx'
 import { listConnectors, listCustomerApis, listHashRecipes, listPartners, listCascadePolicies, listRuns } from '../../services/appService.js'
-import { Check, Circle, AlertCircle } from 'lucide-react'
+import { toList } from '../../services/appService.js'
+import { Check, Circle, AlertCircle, Calendar } from 'lucide-react'
 
 export default function Dashboard() {
   const [connectors, setConnectors] = useState([])
@@ -12,15 +13,17 @@ export default function Dashboard() {
   const [policies, setPolicies] = useState([])
   const [runs, setRuns] = useState([])
   const [loading, setLoading] = useState(true)
+  const [apiError, setApiError] = useState('')
 
   useEffect(() => {
+    setApiError('')
     Promise.all([
-      listConnectors().then((d) => (Array.isArray(d) ? d : d?.connectors || [])).catch(() => []),
-      listCustomerApis().then((d) => (Array.isArray(d) ? d : d?.integrations || d || [])).catch(() => []),
-      listHashRecipes().then((d) => (Array.isArray(d) ? d : d?.recipes || [])).catch(() => []),
-      listPartners().then((d) => (Array.isArray(d) ? d : d?.partners || [])).catch(() => []),
-      listCascadePolicies().then((d) => (Array.isArray(d) ? d : d?.policies || [])).catch(() => []),
-      listRuns().then((d) => (Array.isArray(d) ? d : d?.runs || [])).catch(() => [])
+      listConnectors().then((d) => toList(d)).catch((e) => { setApiError(e?.message || 'Failed to load connectors'); return [] }),
+      listCustomerApis().then((d) => toList(d, ['integrations', 'items'])).catch((e) => { setApiError(e?.message || 'Failed to load Customer APIs'); return [] }),
+      listHashRecipes().then((d) => toList(d)).catch(() => []),
+      listPartners().then((d) => toList(d)).catch(() => []),
+      listCascadePolicies().then((d) => toList(d)).catch(() => []),
+      listRuns().then((d) => toList(d)).catch(() => [])
     ]).then(([c, a, r, p, pol, run]) => {
       setConnectors(c)
       setCustomerApis(a)
@@ -32,14 +35,18 @@ export default function Dashboard() {
   }, [])
 
   const hasIntegration = connectors.length > 0 || customerApis.length > 0
-  const hasConnectedAgent = connectors.some((x) => x.last_heartbeat)
-  const hasHealthyCustomerApi = customerApis.some((x) => x.last_healthcheck)
+  const hasConnectedAgent = connectors.some((x) => x.last_heartbeat || x.lastHeartbeat)
+  const hasHealthyCustomerApi = customerApis.some((x) => x.last_healthcheck || x.lastHealthcheck)
   const integrationOk = hasConnectedAgent || hasHealthyCustomerApi
-  const hasHashRecipe = recipes.length > 0
+  const hasHashRecipe = recipes.length > 0 && recipes.some((r) => r.active)
   const hasPartners = partners.length > 0
   const hasCascade = policies.length > 0
-  const hasRunSchedule = true // backend may expose schedule; assume configured if runs exist or user configured
+  const hasRunSchedule = true
   const scheduleOk = true
+
+  const lastRunAt = runs[0]?.created_at || runs[0]?.createdAt
+  const daysSinceLastRun = lastRunAt ? Math.floor((Date.now() - new Date(lastRunAt)) / (24 * 60 * 60 * 1000)) : null
+  const within45Days = daysSinceLastRun != null && daysSinceLastRun <= 45
 
   const checks = [
     { label: 'Integration configured (Agent or Customer APIs)', ok: hasIntegration && integrationOk, link: '/app/integrations' },
@@ -60,6 +67,12 @@ export default function Dashboard() {
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-50">Dashboard</h1>
         <p className="mt-1 text-slate-400">Readiness for DROP compliance</p>
       </div>
+
+      {apiError ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          {apiError} Check your connection and try again, or go to <Link to="/app/settings" className="underline">Settings</Link>.
+        </div>
+      ) : null}
 
       <Card className="max-w-xl">
         <CardHeader>
@@ -87,23 +100,36 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {(lastRun || lastHeartbeatConnector) && (
+      {(lastRun || lastHeartbeatConnector || runs.length === 0) && (
         <Card>
           <CardHeader>
             <div className="text-sm font-semibold text-slate-50">Last run / Last heartbeat</div>
-            <div className="text-xs text-slate-400">Latest activity</div>
+            <div className="text-xs text-slate-400">45-day compliance window: run at least every 45 days</div>
           </CardHeader>
           <CardContent className="space-y-2">
-            {lastRun && (
-              <p className="text-sm text-slate-300">
-                Last run: <span className="text-slate-200">{lastRun.id || lastRun.created_at}</span>
-                {lastRun.created_at ? ` — ${new Date(lastRun.created_at).toLocaleString()}` : ''}
-              </p>
+            {lastRun ? (
+              <>
+                <p className="text-sm text-slate-300">
+                  Last run: <span className="text-slate-200">{lastRun.id || lastRun.created_at}</span>
+                  {lastRun.created_at ? ` — ${new Date(lastRun.created_at).toLocaleString()}` : ''}
+                </p>
+                {daysSinceLastRun != null && (
+                  <p className="text-xs flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-slate-500" />
+                    <span className={within45Days ? 'text-regulatory-400' : 'text-amber-400'}>
+                      {daysSinceLastRun === 0 ? 'Today' : `${daysSinceLastRun} day${daysSinceLastRun === 1 ? '' : 's'} since last run`}
+                      {within45Days ? ' · Within 45-day window' : ' · Over 45 days — schedule a run'}
+                    </span>
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-slate-500">No runs yet. Configure a schedule in <Link to="/app/runs" className="text-regulatory-300 hover:text-regulatory-200">Runs</Link> to stay within the 45-day compliance window.</p>
             )}
             {lastHeartbeatConnector && (
               <p className="text-sm text-slate-300">
-                Last heartbeat (Agent): <span className="text-slate-200">{lastHeartbeatConnector.name || lastHeartbeatConnector.id}</span>
-                {' '}{new Date(lastHeartbeatConnector.last_heartbeat).toLocaleString()}
+                Last successful sync (Agent): <span className="text-slate-200">{lastHeartbeatConnector.name || lastHeartbeatConnector.id}</span>
+                {' '}{new Date(lastHeartbeatConnector.last_heartbeat || lastHeartbeatConnector.lastHeartbeat).toLocaleString()}
               </p>
             )}
           </CardContent>
@@ -112,7 +138,21 @@ export default function Dashboard() {
 
       {loading ? (
         <p className="text-sm text-slate-500">Loading…</p>
-      ) : (connectors.length > 0 || customerApis.length > 0) ? (
+      ) : connectors.length === 0 && customerApis.length === 0 ? (
+        <Card>
+          <CardHeader>
+            <div className="text-sm font-semibold text-slate-50">Integration status</div>
+            <div className="text-xs text-slate-400">No integrations yet</div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-slate-400 mb-4">Add a Connector (Docker Agent) or Customer API to start. Run onboarding for a guided setup.</p>
+            <div className="flex gap-3">
+              <Link to="/app/onboarding"><span className="inline-flex items-center justify-center rounded-xl bg-regulatory-500 px-4 py-3 text-sm font-semibold text-white hover:bg-regulatory-400">Start onboarding</span></Link>
+              <Link to="/app/integrations"><span className="inline-flex items-center justify-center rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-800">Integrations</span></Link>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
         <Card>
           <CardHeader>
             <div className="text-sm font-semibold text-slate-50">Integration status</div>
@@ -144,7 +184,7 @@ export default function Dashboard() {
             </ul>
           </CardContent>
         </Card>
-      ) : null}
+      )}
     </div>
   )
 }

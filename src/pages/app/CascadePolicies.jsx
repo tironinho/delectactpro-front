@@ -1,8 +1,18 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card.jsx'
 import Button from '../../components/ui/Button.jsx'
-import { listCascadePolicies, upsertCascadePolicy, dispatchCascadeTest, listPartners, listConnectors, listCustomerApis } from '../../services/appService.js'
-import { Play } from 'lucide-react'
+import {
+  listCascadePolicies,
+  upsertCascadePolicy,
+  dispatchCascadeTest,
+  listPartners,
+  listConnectors,
+  listCustomerApis,
+  listDeletionRequests
+} from '../../services/appService.js'
+import { toList } from '../../services/appService.js'
+import { Play, ExternalLink } from 'lucide-react'
 
 const MODES = ['DRY_RUN', 'ENFORCE']
 
@@ -11,13 +21,16 @@ export default function CascadePolicies() {
   const [partners, setPartners] = useState([])
   const [connectors, setConnectors] = useState([])
   const [customerApis, setCustomerApis] = useState([])
+  const [deletionRequests, setDeletionRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [dispatching, setDispatching] = useState(false)
   const [error, setError] = useState('')
+  const [dispatchRequestId, setDispatchRequestId] = useState('')
   const [form, setForm] = useState({
     partner_id: '',
     target_type: 'connector',
     target_id: '',
+    retriesMax: 3,
     retries_max: 3,
     backoff_minutes: 5,
     sla_days: 45,
@@ -29,15 +42,17 @@ export default function CascadePolicies() {
   function load() {
     setLoading(true)
     Promise.all([
-      listCascadePolicies().then((d) => (Array.isArray(d) ? d : d?.policies || [])).catch(() => []),
-      listPartners().then((d) => (Array.isArray(d) ? d : d?.partners || [])).catch(() => []),
-      listConnectors().then((d) => (Array.isArray(d) ? d : d?.connectors || [])).catch(() => []),
-      listCustomerApis().then((d) => (Array.isArray(d) ? d : d?.integrations || d || [])).catch(() => [])
-    ]).then(([pol, p, c, a]) => {
+      listCascadePolicies().then((d) => toList(d, ['policies', 'items'])).catch(() => []),
+      listPartners().then((d) => toList(d, ['partners', 'items'])).catch(() => []),
+      listConnectors().then((d) => toList(d, ['connectors', 'items'])).catch(() => []),
+      listCustomerApis().then((d) => toList(d, ['integrations', 'items'])).catch(() => []),
+      listDeletionRequests().then((d) => toList(d, ['items'])).catch(() => [])
+    ]).then(([pol, p, c, a, req]) => {
       setPolicies(pol)
       setPartners(p)
       setConnectors(c)
       setCustomerApis(a)
+      setDeletionRequests(Array.isArray(req) ? req : [])
     }).finally(() => setLoading(false))
   }
 
@@ -48,10 +63,14 @@ export default function CascadePolicies() {
     setError('')
     try {
       const payload = {
+        partnerId: form.partner_id,
         partner_id: form.partner_id,
         target_type: form.target_type,
         target_id: form.target_id,
-        retries_max: form.retries_max,
+        targetType: form.target_type,
+        targetId: form.target_id,
+        retries_max: form.retries_max ?? form.retriesMax,
+        retriesMax: form.retries_max ?? form.retriesMax,
         retry_backoff_minutes: form.backoff_minutes,
         backoff_minutes: form.backoff_minutes,
         sla_days: form.sla_days,
@@ -70,10 +89,10 @@ export default function CascadePolicies() {
     setError('')
     setDispatching(true)
     try {
-      await dispatchCascadeTest()
+      await dispatchCascadeTest(dispatchRequestId || undefined)
       load()
     } catch (e) {
-      setError(e?.message || 'Dispatch failed')
+      setError(e?.message || 'Dispatch failed. Backend may require a requestId.')
     } finally {
       setDispatching(false)
     }
@@ -83,7 +102,7 @@ export default function CascadePolicies() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-50">Cascade Policies</h1>
-        <p className="mt-1 text-slate-400">Partner → connector → policy: retries, SLA, attestation, mode.</p>
+        <p className="mt-1 text-slate-400">Partner → target (connector or Customer API) → policy: retries, SLA, attestation, mode.</p>
       </div>
 
       {error ? (
@@ -139,8 +158,8 @@ export default function CascadePolicies() {
               <input
                 type="number"
                 min={0}
-                value={form.retries_max}
-                onChange={(e) => setForm((p) => ({ ...p, retries_max: +e.target.value }))}
+                value={form.retries_max ?? form.retriesMax}
+                onChange={(e) => setForm((p) => ({ ...p, retries_max: +e.target.value, retriesMax: +e.target.value }))}
                 className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100"
               />
             </div>
@@ -205,12 +224,40 @@ export default function CascadePolicies() {
       <Card>
         <CardHeader>
           <div className="text-sm font-semibold text-slate-50">Dispatch cascade test</div>
-          <p className="text-xs text-slate-400">Calls admin/dispatch in tenant scope.</p>
+          <p className="text-xs text-slate-400">Run cascade for a deletion request. Backend may require a real requestId.</p>
         </CardHeader>
-        <CardContent>
-          <Button onClick={handleDispatch} disabled={dispatching}>
-            <Play className="h-4 w-4" /> {dispatching ? 'Dispatching…' : 'Dispatch cascade test'}
-          </Button>
+        <CardContent className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-400">Deletion request (optional)</label>
+            <select
+              value={dispatchRequestId}
+              onChange={(e) => setDispatchRequestId(e.target.value)}
+              className="mt-1 w-full max-w-md rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100"
+            >
+              <option value="">— None (backend may reject) —</option>
+              {deletionRequests.slice(0, 20).map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.id} {r.created_at ? ` — ${new Date(r.created_at).toLocaleString()}` : ''}
+                </option>
+              ))}
+            </select>
+            {deletionRequests.length === 0 && (
+              <p className="mt-1 text-xs text-slate-500">No recent deletion requests. Create one via Audit/DSAR or use a known request ID.</p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={handleDispatch} disabled={dispatching}>
+              <Play className="h-4 w-4" /> {dispatching ? 'Dispatching…' : 'Dispatch cascade test'}
+            </Button>
+            <Link to="/app/audit-logs">
+              <Button variant="ghost" size="sm">
+                <ExternalLink className="h-3 w-3" /> Audit logs / DSAR
+              </Button>
+            </Link>
+            <Link to="/app/runs">
+              <Button variant="ghost" size="sm">View runs</Button>
+            </Link>
+          </div>
         </CardContent>
       </Card>
 
@@ -223,7 +270,7 @@ export default function CascadePolicies() {
             <ul className="space-y-2">
               {policies.map((p) => (
                 <li key={p.id || p.partner_id} className="rounded-xl border border-slate-800 px-4 py-3 text-sm text-slate-300">
-                  Partner {p.partner_id} → {p.target_type === 'customer_api' ? 'Customer API' : 'Connector'} {p.target_id} · retries={p.retries_max} · SLA {p.sla_days}d · {p.mode}
+                  Partner {p.partner_id} → {p.target_type === 'customer_api' ? 'Customer API' : 'Connector'} {p.target_id} · retries={p.retries_max ?? p.retriesMax} · SLA {p.sla_days}d · {p.mode}
                 </li>
               ))}
             </ul>

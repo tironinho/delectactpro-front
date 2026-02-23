@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { submitLead } from '../services/leadService.js'
+import { setStoredLead } from '../utils/attribution.js'
 import Button from './ui/Button.jsx'
 import { Mail, Building2, User } from 'lucide-react'
 
@@ -15,7 +16,8 @@ export default function EarlyAccessForm({ className = '' }) {
     setErr('')
     setStatus('loading')
     try {
-      await submitLead({ email, company, role, source: 'hero_form' })
+      const res = await submitLead({ email, company, role, source: 'hero_form' })
+      setStoredLead({ leadId: res?.leadId ?? res?.id, email, company, role })
       setStatus('ok')
     } catch (ex) {
       setErr(ex?.message || 'Failed to submit.')

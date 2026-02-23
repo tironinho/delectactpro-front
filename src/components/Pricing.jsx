@@ -13,16 +13,18 @@ const PLANS = [
     name: 'Setup Fee',
     price: '$999',
     cadence: 'one-time',
-    badge: 'Limited to first 100 clients',
+    badge: 'Secure one of the first 100 priority onboarding slots',
     highlight: true,
     features: [
       'Early Access onboarding + architecture review',
-      'DROP sandbox readiness plan',
+      'Spring 2026 API sandbox readiness',
       'Evidence & logging blueprint for audits',
       'Downstream cascade templates',
       'Operational runbook (SLOs, retries, exceptions)'
     ],
-    cta: 'Pay Setup Fee (Stripe)'
+    cta: 'Pay Setup Fee (Stripe)',
+    trustCopy: ['Stripe hosted checkout', 'Invoice/receipt available'],
+    talkToSales: true
   },
   {
     id: 'startup_499',
@@ -136,9 +138,21 @@ export default function Pricing() {
 
               <CardFooter className="space-y-3">
                 {p.id === 'setup_fee_999' ? (
-                  <CheckoutButton planId="setup_fee_999" label={p.cta} variant="primary" />
+                  <>
+                    <CheckoutButton planId="setup_fee_999" label={p.cta} variant="primary" />
+                    {p.trustCopy?.length > 0 && (
+                      <p className="text-center text-[11px] text-slate-500">
+                        {p.trustCopy.join(' · ')}
+                      </p>
+                    )}
+                    {p.talkToSales && (
+                      <Button as="a" href="mailto:sales@deleteactpro.com?subject=Setup%20Fee%20%2F%20Procurement%20Inquiry" variant="ghost" size="sm" className="w-full">
+                        Talk to Sales (procurement)
+                      </Button>
+                    )}
+                  </>
                 ) : (
-                  <Button as="a" href="mailto:sales@dropcompliancegateway.example?subject=Pricing%20Inquiry%20-%20DROP%20Compliance%20Gateway" variant="ghost" className="w-full">
+                  <Button as="a" href="mailto:sales@deleteactpro.com?subject=Pricing%20Inquiry%20-%20DROP%20Compliance%20Gateway" variant="ghost" className="w-full">
                     {p.cta} <ArrowRight className="h-4 w-4" />
                   </Button>
                 )}

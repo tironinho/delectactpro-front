@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card.jsx'
 import Button from '../../components/ui/Button.jsx'
 import { listConnectors, listCustomerApis } from '../../services/appService.js'
+import { toList } from '../../services/appService.js'
 import { Plug, Globe, Circle, Plus } from 'lucide-react'
 
 export default function Integrations() {
@@ -12,8 +13,8 @@ export default function Integrations() {
 
   useEffect(() => {
     Promise.all([
-      listConnectors().then((d) => (Array.isArray(d) ? d : d?.connectors || [])).catch(() => []),
-      listCustomerApis().then((d) => (Array.isArray(d) ? d : d?.integrations || d || [])).catch(() => [])
+      listConnectors().then((d) => toList(d)).catch(() => []),
+      listCustomerApis().then((d) => toList(d, ['integrations', 'items'])).catch(() => [])
     ]).then(([c, a]) => {
       setConnectors(c)
       setCustomerApis(a)
@@ -47,7 +48,7 @@ export default function Integrations() {
             {loading ? (
               <p className="text-sm text-slate-500">Loading…</p>
             ) : connectors.length === 0 ? (
-              <p className="text-sm text-slate-500">No connectors. Create one to run the agent with a single docker run.</p>
+              <p className="text-sm text-slate-500">No connectors yet. Create one in Connectors to run the agent with a single docker run command.</p>
             ) : (
               <ul className="space-y-2">
                 {connectors.slice(0, 5).map((c) => (
@@ -85,7 +86,7 @@ export default function Integrations() {
             {loading ? (
               <p className="text-sm text-slate-500">Loading…</p>
             ) : customerApis.length === 0 ? (
-              <p className="text-sm text-slate-500">No Customer API integrations. Add one to use your own infrastructure.</p>
+              <p className="text-sm text-slate-500">No Customer API integrations yet. Add one in Customer APIs to use your own health/delete/status endpoints.</p>
             ) : (
               <ul className="space-y-2">
                 {customerApis.slice(0, 5).map((api) => (

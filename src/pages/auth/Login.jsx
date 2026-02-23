@@ -13,7 +13,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
-  const from = location.state?.from?.pathname || '/app/onboarding'
+  const from = location.state?.from?.pathname || '/app'
 
   async function handleSubmit(e) {
     e.preventDefault()
